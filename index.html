@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Simple template</title>
+  <script src="./libcaesium-wasm.js"></script>
+</head>
+
+<body>
+  <h1>WASM Compression Example</h1>
+  <input type="file" id="fileInput">
+  <button onclick="compressFile()">Compress</button>
+</body>
+<script>
+  Module.onRuntimeInitialized = function () {
+    console.log('onRuntimeInitialized.....')
+  }
+
+  const fileInput = document.getElementById('fileInput');
+
+  async function compressFile() {
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+    if (!file) {
+      alert("Please select a file.");
+      return;
+    } 
+
+    const arrayBuffer = await file.arrayBuffer();
+    const input = new Uint8Array(arrayBuffer);
+    const inputSize = input.length;
+    const quality = 75; // Example quality value
+    const keepMetadata = 1; // Example value to keep metadata
+
+    // Allocate memory in the Emscripten heap for the input data
+    const inputPtr = Module._malloc(inputSize);
+ 
+    Module.HEAPU8.set(input, inputSize);
+
+    // Call the w_compress function
+    const resultPtr = Module._w_compress(inputPtr, inputSize, quality, keepMetadata);
+    const compressionResult = new Uint32Array(Module.HEAPU32.buffer, resultPtr, 5);
+
+    console.log(compressionResult)
+    const status = compressionResult[0];
+    const errorCode = compressionResult[1];
+    const pointer = compressionResult[2];
+    const len = compressionResult[3];
+    const capacity = compressionResult[4];
+
+    if (status === 1) {
+      // Compression successful
+      const compressedData = new Uint8Array(Module.HEAPU8.buffer, pointer, len);
+      const blob = new Blob([compressedData], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'compressed_file';
+      link.click();
+
+      // Free the allocated memory
+      Module._drop_vector_struct(resultPtr);
+    } else {
+      // Compression failed
+      console.error(`Compression failed with error code: ${errorCode}`);
+    }
+
+    // Free the input memory
+    Module._free(inputPtr);
+  }
+</script>
+
+</html>
